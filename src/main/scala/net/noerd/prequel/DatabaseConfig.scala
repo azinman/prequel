@@ -20,7 +20,7 @@ import org.joda.time.Duration
 sealed abstract class TransactionIsolation( val id: Int )
 
 object IsolationLevels {
-    
+
     case object None extends TransactionIsolation( TRANSACTION_NONE )
     case object ReadCommitted extends TransactionIsolation( TRANSACTION_READ_COMMITTED )
     case object ReadUncommitted extends TransactionIsolation( TRANSACTION_READ_UNCOMMITTED )
@@ -29,7 +29,7 @@ object IsolationLevels {
 }
 
 /**
- * Configures how to connect to the database and how the connection 
+ * Configures how to connect to the database and how the connection
  * should then be pooled.
  *
  * @param driver is a full class name of the JDBC Driver used.
@@ -40,24 +40,23 @@ object IsolationLevels {
  * @param poolConfig configures how the connections should be pooled.
  */
 final case class DatabaseConfig(
-    val driver: String, 
-    val jdbcURL: String, 
-    val username: String = "", 
+    val driver: String,
+    val jdbcURL: String,
+    val username: String = "",
     val password: String = "",
     val isolationLevel: TransactionIsolation = IsolationLevels.ReadCommitted,
-    val sqlFormatter: SQLFormatter = SQLFormatter.DefaultSQLFormatter,
     val poolConfig: PoolConfig = new PoolConfig
 ) {
-    
+
     // Make sure that the class is available
     Class.forName( driver )
 
     /**
      * Execute the block in a transaction against the db defined by
-     * the configuration. 
+     * the configuration.
      *
-     * If the block is executed succesfully the transaction 
-     * will be committed but if an exception is throw it will be rolled back 
+     * If the block is executed succesfully the transaction
+     * will be committed but if an exception is throw it will be rolled back
      * immediately and rethrow the exception.
      *
      * @throws Any Exception that the block may generate.
@@ -80,13 +79,13 @@ final case class PoolConfig(
     val maxWait: Duration = new Duration( DEFAULT_MAX_WAIT ),
     val evictionInterval: Duration = new Duration( DEFAULT_TIME_BETWEEN_EVICTION_RUNS_MILLIS ),
     val evictAfterIdleFor: Duration = new Duration( DEFAULT_MIN_EVICTABLE_IDLE_TIME_MILLIS ),
-    val testWhileIdle: Boolean = DEFAULT_TEST_WHILE_IDLE    
+    val testWhileIdle: Boolean = DEFAULT_TEST_WHILE_IDLE
 ) {
-    
+
     def toGenericObjectPoolConfig: GenericObjectPool.Config = {
-        
+
         val config = new GenericObjectPool.Config
-        
+
         config.maxActive = maxActive
         config.maxIdle = maxIdle
         config.minIdle = minIdle
@@ -94,7 +93,7 @@ final case class PoolConfig(
         config.timeBetweenEvictionRunsMillis = evictionInterval.getMillis
         config.testWhileIdle = testWhileIdle
         config.minEvictableIdleTimeMillis = evictAfterIdleFor.getMillis
-    
+
         config
     }
 }

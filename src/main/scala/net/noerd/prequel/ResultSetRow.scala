@@ -1,14 +1,19 @@
 package net.noerd.prequel
 
+import java.math.BigDecimal
 import java.util.Date
+import java.util.UUID
 
+import java.sql.Timestamp
 import java.sql.ResultSet
 import java.sql.ResultSetMetaData
 
 import scala.collection.mutable.ArrayBuffer
 
 import org.joda.time.DateTime
+import org.joda.time.DateTimeZone
 import org.joda.time.Duration
+import com.typemapper.postgres.HStore
 
 /**
  * Wraps a ResultSet in a row context. The ResultSetRow gives access
@@ -19,7 +24,7 @@ import org.joda.time.Duration
 class ResultSetRow( val rs: ResultSet ) {
     /** Maintain the current position. */
     private var position = 0
-      
+
     def nextBoolean: Option[ Boolean ] = nextValueOption( rs.getBoolean )
     def nextInt: Option[ Int ] = nextValueOption( rs.getInt )
     def nextLong: Option[ Long ] = nextValueOption( rs.getLong )
@@ -28,8 +33,23 @@ class ResultSetRow( val rs: ResultSet ) {
     def nextString: Option[ String ] = nextValueOption( rs.getString )
     def nextDate: Option[ Date ] =  nextValueOption( rs.getTimestamp )
     def nextObject: Option[ AnyRef ] = nextValueOption( rs.getObject )
-        
-    def columnNames: Seq[ String ]= {          
+    def nextArray: Option[ java.sql.Array ] = nextValueOption( rs.getArray )
+    def nextBigDecimal: Option[ BigDecimal ] = nextValueOption( rs.getBigDecimal )
+    // Extended objects for postgres
+    def nextUUID: Option[  UUID ] = nextValueOption( rs.getObject ) match {
+        case Some(uuid:UUID) => Some(uuid)
+        case None => None
+    }
+    def nextHStore: Option[ HStore ] = nextValueOption( rs.getObject ) match {
+        case Some(hstore:HStore) => Some(hstore)
+        case None => None
+    }
+    def nextDateTimeUTC: Option[ DateTime ] = nextValueOption ( rs.getTimestamp ) match {
+        case Some(timestamp:Timestamp) => Some(new DateTime( timestamp.getTime, DateTimeZone.UTC ))
+        case None => None
+    }
+
+    def columnNames: Seq[ String ]= {
         val columnNames = ArrayBuffer.empty[ String ]
         val metaData = rs.getMetaData
         for(index <- 0.until( metaData.getColumnCount ) ) {
@@ -37,9 +57,9 @@ class ResultSetRow( val rs: ResultSet ) {
         }
         columnNames
     }
-    
-    private def incrementPosition = { 
-        position = position + 1 
+
+    private def incrementPosition = {
+        position = position + 1
     }
 
     private def nextValueOption[T]( f: (Int) => T ): Option[ T ] = {
@@ -51,47 +71,7 @@ class ResultSetRow( val rs: ResultSet ) {
 }
 
 object ResultSetRow {
-    
     def apply( rs: ResultSet ): ResultSetRow = {
         new ResultSetRow( rs )
     }
-}
-/**
- * Defines a number of implicit conversion methods for the supported ColumnTypes. A call
- * to one of these methods will return the next value of the right type. The methods make
- * it easy to step through a row in order to build an object from it as shown in the example
- * below.
- * 
- * Handles all types supported by Prequel as well as Option variants of those.
- *
- *     import net.noerd.prequel.ResultSetRowImplicits._
- *
- *     case class Person( id: Long, name: String, birthdate: DateTime )
- *
- *     InTransaction { tx =>
- *         tx.select( "select id, name, birthdate from people" ) { r =>
- *             Person( r, r, r )
- *         }
- *     }
- */
-object ResultSetRowImplicits {
-    implicit def row2Boolean( row: ResultSetRow ) = BooleanColumnType( row ).nextValue
-    implicit def row2Int( row: ResultSetRow ): Int = IntColumnType( row ).nextValue
-    implicit def row2Long( row: ResultSetRow ): Long = LongColumnType( row ).nextValue
-    implicit def row2Float( row: ResultSetRow ) = FloatColumnType( row ).nextValue
-    implicit def row2Double( row: ResultSetRow ) = DoubleColumnType( row ).nextValue
-    implicit def row2String( row: ResultSetRow ) = StringColumnType( row ).nextValue
-    implicit def row2Date( row: ResultSetRow ) = DateColumnType( row ).nextValue
-    implicit def row2DateTime( row: ResultSetRow ) = DateTimeColumnType( row ).nextValue
-    implicit def row2Duration( row: ResultSetRow ) = DurationColumnType( row ).nextValue
-
-    implicit def row2BooleanOption( row: ResultSetRow ) = BooleanColumnType( row ).nextValueOption
-    implicit def row2IntOption( row: ResultSetRow ) = IntColumnType( row ).nextValueOption
-    implicit def row2LongOption( row: ResultSetRow ) = LongColumnType( row ).nextValueOption
-    implicit def row2FloatOption( row: ResultSetRow ) = FloatColumnType( row ).nextValueOption
-    implicit def row2DoubleOption( row: ResultSetRow ) = DoubleColumnType( row ).nextValueOption
-    implicit def row2StringOption( row: ResultSetRow ) = StringColumnType( row ).nextValueOption
-    implicit def row2DateOption( row: ResultSetRow ) = DateColumnType( row ).nextValueOption
-    implicit def row2DateTimeOption( row: ResultSetRow ) = DateTimeColumnType( row ).nextValueOption
-    implicit def row2DurationOption( row: ResultSetRow ) = DurationColumnType( row ).nextValueOption
 }

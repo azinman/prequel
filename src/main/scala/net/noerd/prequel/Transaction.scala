@@ -1,51 +1,67 @@
 package net.noerd.prequel
 
-import java.sql.Connection
-import java.sql.Statement
-import java.sql.ResultSet
-
 import scala.collection.mutable.ArrayBuffer
 
-import org.joda.time.DateTime
-import org.joda.time.Duration
+import java.net.URL
+import java.math.BigDecimal
+import java.util.UUID
 
-import net.noerd.prequel.RichConnection.conn2RichConn 
-import net.noerd.prequel.ResultSetRowImplicits.row2Long
-import net.noerd.prequel.ResultSetRowImplicits.row2Int
-import net.noerd.prequel.ResultSetRowImplicits.row2Boolean
-import net.noerd.prequel.ResultSetRowImplicits.row2String
-import net.noerd.prequel.ResultSetRowImplicits.row2Float
-import net.noerd.prequel.ResultSetRowImplicits.row2Double
-import net.noerd.prequel.ResultSetRowImplicits.row2DateTime
-import net.noerd.prequel.ResultSetRowImplicits.row2Duration
+import java.sql.Array
+import java.sql.Connection
+import java.sql.Statement
+import java.sql.PreparedStatement
+import java.sql.ResultSet
+import java.sql.Timestamp
+import java.sql.Types
+
+import org.joda.time.DateTime
+import org.joda.time.DateTimeZone
+
+import com.typemapper.postgres.HStore
+
+import net.noerd.prequel.RichConnection.conn2RichConn
+
+object NullArray
+object NullBigDecimal
+object NullBoolean
+object NullDateTime
+object NullDouble
+object NullFloat
+object NullInt
+object NullLong
+object NullString
+object NullShort
+object NullURL
+object NullHStore
+object NullUUID
 
 /**
  * A Transaction is normally created by the InTransaction object and can be
  * used to execute one or more queries against the database. Once the block
  * passed to InTransaction is succesfully executed the transaction is auto-
- * matically committed. And if some exception is throws during execution the 
- * transaction is rollbacked. 
- * 
- * @throws SQLException all methods executing queries will throw SQLException 
- *         if the query was not properly formatted or something went wrong in 
+ * matically committed. And if some exception is throws during execution the
+ * transaction is rollbacked.
+ *
+ * @throws SQLException all methods executing queries will throw SQLException
+ *         if the query was not properly formatted or something went wrong in
  *         the database during execution.
  *
- * @throws IllegalFormatException: Will be throw by all method if the format 
+ * @throws IllegalFormatException: Will be throw by all method if the format
  *         string is invalid or if there is not enough parameters.
  */
-class Transaction( val connection: Connection, val formatter: SQLFormatter ) {
-    
+class Transaction( val connection: Connection ) {
+
     /**
      * Returns all records returned by the query after being converted by the
      * given block. All objects are kept in memory to this method is no suited
-     * for very big result sets. Use selectAndProcess if you need to process 
+     * for very big result sets. Use selectAndProcess if you need to process
      * bigger datasets.
-     * 
+     *
      * @param sql query that should return records
      * @param params are the optional parameters used in the query
      * @param block is a function converting the row to something else
      */
-    def select[ T ]( sql: String, params: Formattable* )( block: ResultSetRow => T ): Seq[ T ] = {
+    def select[ T ]( sql: String, params: Any* )( block: ResultSetRow => T ): Seq[ T ] = {
         val results = new ArrayBuffer[ T ]
         _selectIntoBuffer( Some( results ), sql, params.toSeq )( block )
         results
@@ -55,25 +71,25 @@ class Transaction( val connection: Connection, val formatter: SQLFormatter ) {
      * Executes the query and passes each row to the given block. This method
      * does not keep the objects in memory and returns Unit so the row needs to
      * be fully processed in the block.
-     * 
+     *
      * @param sql query that should return records
      * @param params are the optional parameters used in the query
      * @param block is a function fully processing each row
      */
-    def selectAndProcess( sql: String, params: Formattable* )( block: ResultSetRow => Unit ): Unit = {
+    def selectAndProcess( sql: String, params: Any* )( block: ResultSetRow => Unit ): Unit = {
         _selectIntoBuffer( None, sql, params.toSeq )( block )
     }
 
-    
+
     /**
      * Returns the first record returned by the query after being converted by the
      * given block. If the query does not return anything None is returned.
-     * 
+     *
      * @param sql query that should return records
      * @param params are the optional parameters used in the query
      * @param block is a function converting the row to something else
      */
-    def selectHeadOption[ T ]( sql: String, params: Formattable* )( block: ResultSetRow => T ): Option[ T ] = {
+    def selectHeadOption[ T ]( sql: String, params: Any* )( block: ResultSetRow => T ): Option[ T ] = {
         select( sql, params.toSeq: _* )( block ).headOption
     }
 
@@ -86,132 +102,32 @@ class Transaction( val connection: Connection, val formatter: SQLFormatter ) {
      * @param block is a function converting the returned row to something useful.
      * @throws NoSuchElementException if the query did not return any records.
      */
-    def selectHead[ T ]( sql: String, params: Formattable* )( block: ResultSetRow => T ): T = {
+    def selectHead[ T ]( sql: String, params: Any* )( block: ResultSetRow => T ): T = {
         select( sql, params.toSeq: _* )( block ).head
     }
-    
-    /** 
-     * Convience method for intepreting the first column of the first record as a long
-     * 
-     * @param sql is a query that must return at least one record
-     * @param params are the optional parameters of the query
-     * @throws RuntimeException if the value is null
-     * @throws SQLException if the value in the first column could not be intepreted as a long
-     * @throws NoSuchElementException if the query did not return any records.
-     */
-    def selectLong( sql: String, params: Formattable* ): Long = {
-        selectHead( sql, params.toSeq: _* )( row2Long )
-    }
 
-    /** 
-     * Convience method for intepreting the first column of the first record as a Int
-     * 
-     * @param sql is a query that must return at least one record
-     * @param params are the optional parameters of the query
-     * @throws RuntimeException if the value is null
-     * @throws SQLException if the value in the first column could not be intepreted as a Int
-     * @throws NoSuchElementException if the query did not return any records.
-     */
-    def selectInt( sql: String, params: Formattable* ): Int = {
-        selectHead( sql, params.toSeq: _* )( row2Int )
-    }
 
-    /** 
-     * Convience method for intepreting the first column of the first record as a Boolean
-     * 
-     * @param sql is a query that must return at least one record
-     * @param params are the optional parameters of the query
-     * @throws RuntimeException if the value is null
-     * @throws SQLException if the value in the first column could not be intepreted as a Boolean
-     * @throws NoSuchElementException if the query did not return any records.
-     */
-    def selectBoolean( sql: String, params: Formattable* ): Boolean = {
-        selectHead( sql, params.toSeq: _* )( row2Boolean )
-    }
-    
-    /** 
-     * Convience method for intepreting the first column of the first record as a String
-     * 
-     * @param sql is a query that must return at least one record
-     * @param params are the optional parameters of the query
-     * @throws RuntimeException if the value is null
-     * @throws SQLException if the value in the first column could not be intepreted as a String
-     * @throws NoSuchElementException if the query did not return any records.
-     */
-    def selectString( sql: String, params: Formattable* ): String = {
-        selectHead( sql, params.toSeq: _* )( row2String )
-    }
-
-    /** 
-     * Convience method for intepreting the first column of the first record as a Float
-     * 
-     * @param sql is a query that must return at least one record
-     * @param params are the optional parameters of the query
-     * @throws RuntimeException if the value is null
-     * @throws SQLException if the value in the first column could not be intepreted as a Float
-     * @throws NoSuchElementException if the query did not return any records.
-     */
-    def selectFloat( sql: String, params: Formattable* ): Float = {
-        selectHead( sql, params.toSeq: _* )( row2Float )
-    }
-
-    /** 
-     * Convience method for intepreting the first column of the first record as a Double
-     * 
-     * @param sql is a query that must return at least one record
-     * @param params are the optional parameters of the query
-     * @throws RuntimeException if the value is null
-     * @throws SQLException if the value in the first column could not be intepreted as a Double
-     * @throws NoSuchElementException if the query did not return any records.
-     */
-    def selectDouble( sql: String, params: Formattable* ): Double = {
-        selectHead( sql, params.toSeq: _* )( row2Double )
-    }
-
-    /** 
-     * Convience method for intepreting the first column of the first record as a DateTime
-     * 
-     * @param sql is a query that must return at least one record
-     * @param params are the optional parameters of the query
-     * @throws RuntimeException if the value is null
-     * @throws SQLException if the value in the first column could not be intepreted as a DateTime
-     * @throws NoSuchElementException if the query did not return any records.
-     */
-    def selectDateTime( sql: String, params: Formattable* ): DateTime = {
-        selectHead( sql, params.toSeq: _* )( row2DateTime )
-    }
-
-    /** 
-     * Convience method for intepreting the first column of the first record as a Duration
-     * 
-     * @param sql is a query that must return at least one record
-     * @param params are the optional parameters of the query
-     * @throws RuntimeException if the value is null
-     * @throws SQLException if the value in the first column could not be intepreted as a Duration
-     * @throws NoSuchElementException if the query did not return any records.
-     */
-    def selectDuration( sql: String, params: Formattable* ): Duration = {
-        selectHead( sql, params.toSeq: _* )( row2Duration )
-    }
-    
     /**
-     * Executes the given query and returns the number of affected records
+     * Executes the given query and returns the number of affected records.
+     *
+     * For null values, send the Class object instead. Null itself is never allowed.
      *
      * @param sql query that must not return any records
      * @param params are the optional parameters used in the query
      * @return the number of affected records
      */
-    def execute( sql: String, params: Formattable* ): Int = {
-        connection.usingStatement { statement =>
-            statement.executeUpdate( formatter.formatSeq( sql, params.toSeq ) )
+    def executeUpdate( sql: String, params: Any* ): Int = {
+        connection.usingPreparedStatement(sql) { statement =>
+            _setParams(statement, params)
+            statement.executeUpdate()
         }
     }
-    
+
     /**
-     * Will pass a ReusableStatement to the given block. This block
+     * Will pass a PreparedStatement to the given block. This block
      * may add parameters to the statement and execute it multiple times.
      * The statement will be automatically closed onced the block returns.
-     * 
+     *
      * Example:
      *     tx.executeBatch( "insert into foo values(?)" ) { statement =>
      *         items.foreach { statement.executeWith( _ ) }
@@ -221,41 +137,76 @@ class Transaction( val connection: Connection, val formatter: SQLFormatter ) {
      * @throws SQLException if the query is missing parameters when executed
      *         or if they are of the wrong type.
      */
-    def executeBatch[ T ]( sql: String, generateKeys: Boolean = false )( block: (ReusableStatement) => T ): T = {
-        connection.usingReusableStatement( sql, formatter, generateKeys )( block )
+    def executeBatch[ T ]( sql: String, generateKeys: Boolean = false )( block: (PreparedStatement) => T ): T = {
+        connection.usingPreparedStatement( sql, generateKeys )( block )
     }
-    
+
     /**
-     * Rollbacks the Transaction. 
+     * Rollbacks the Transaction.
      *
      * @throws SQLException if transaction could not be rollbacked
      */
     def rollback(): Unit = connection.rollback()
 
     /**
-     * Commits all changed done in the Transaction. 
+     * Commits all changed done in the Transaction.
      *
      * @throws SQLException if transaction could not be committed.
      */
     def commit(): Unit = connection.commit()
-    
-    private def _selectIntoBuffer[ T ]( 
-        buffer: Option[ ArrayBuffer[T] ], 
-        sql: String, params: Seq[ Formattable ]
+
+    private def _selectIntoBuffer[ T ](
+        buffer: Option[ ArrayBuffer[T] ],
+        sql: String, params: Seq[ Any ]
     )( block: ( ResultSetRow ) => T ): Unit = {
-        connection.usingStatement { statement =>
-            val rs = statement.executeQuery( formatter.formatSeq( sql, params ) )
+        connection.usingPreparedStatement(sql) { statement =>
+            _setParams(statement, params)
+            val rs = statement.executeQuery()
             val append = buffer.isDefined
-            
-            while( rs.next ) {    
+
+            while( rs.next ) {
                 val value = block( ResultSetRow( rs ) )
                 if( append ) buffer.get.append( value )
+            }
+        }
+    }
+
+    private def _setParams(statement:PreparedStatement, params:Seq[Any]) = {
+        var position = 0
+        params.foreach { param:Any =>
+            position += 1
+            param match {
+                case value:java.sql.Array => statement.setArray(position, value)
+                case value:BigDecimal => statement.setBigDecimal(position, value)
+                case value:Boolean => statement.setBoolean(position, value)
+                case value:DateTime => statement.setTimestamp(position, new Timestamp(value.getMillis))
+                case value:Double => statement.setDouble(position, value)
+                case value:Float => statement.setFloat(position, value)
+                case value:Int => statement.setInt(position, value)
+                case value:Long => statement.setLong(position, value)
+                case value:String => statement.setString(position, value)
+                case value:Short => statement.setShort(position, value)
+                case value:URL => statement.setURL(position, value)
+                case value:HStore => statement.setObject(position, value)
+                case value:UUID => statement.setObject(position, value)
+                case NullArray => statement.setNull(position, Types.ARRAY)
+                case NullBigDecimal => statement.setNull(position, Types.NUMERIC)
+                case NullBoolean => statement.setNull(position, Types.BOOLEAN)
+                case NullDateTime => statement.setNull(position, Types.TIMESTAMP)
+                case NullDouble => statement.setNull(position, Types.DOUBLE)
+                case NullFloat => statement.setNull(position, Types.FLOAT)
+                case NullInt => statement.setNull(position, Types.INTEGER)
+                case NullLong => statement.setNull(position, Types.INTEGER)
+                case NullString => statement.setNull(position, Types.VARCHAR)
+                case NullShort => statement.setNull(position, Types.TINYINT)
+                case NullURL => statement.setNull(position, Types.VARCHAR)
+                case NullHStore => statement.setNull(position, Types.OTHER)
+                case NullUUID => statement.setNull(position, Types.OTHER)
             }
         }
     }
 }
 
 object Transaction {
-    
-    def apply( conn: Connection, formatter: SQLFormatter ) = new Transaction( conn, formatter )
+    def apply( conn: Connection ) = new Transaction( conn )
 }
