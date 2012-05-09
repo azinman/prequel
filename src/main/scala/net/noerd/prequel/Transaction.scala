@@ -118,7 +118,7 @@ class Transaction( val connection: Connection ) {
      */
     def executeUpdate( sql: String, params: Any* ): Int = {
         connection.usingPreparedStatement(sql) { statement =>
-            _setParams(statement, params)
+            Transaction.setParameters(statement, params)
             statement.executeUpdate()
         }
     }
@@ -160,7 +160,7 @@ class Transaction( val connection: Connection ) {
         sql: String, params: Seq[ Any ]
     )( block: ( ResultSetRow ) => T ): Unit = {
         connection.usingPreparedStatement(sql) { statement =>
-            _setParams(statement, params)
+            Transaction.setParameters(statement, params)
             val rs = statement.executeQuery()
             val append = buffer.isDefined
 
@@ -170,8 +170,12 @@ class Transaction( val connection: Connection ) {
             }
         }
     }
+}
 
-    private def _setParams(statement:PreparedStatement, params:Seq[Any]) = {
+object Transaction {
+    def apply( conn: Connection ) = new Transaction( conn )
+
+    def setParameters(statement:PreparedStatement, params:Seq[Any]) = {
         var position = 0
         params.foreach { param:Any =>
             position += 1
@@ -205,8 +209,4 @@ class Transaction( val connection: Connection ) {
             }
         }
     }
-}
-
-object Transaction {
-    def apply( conn: Connection ) = new Transaction( conn )
 }
