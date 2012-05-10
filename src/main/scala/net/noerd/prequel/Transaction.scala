@@ -183,7 +183,7 @@ object Transaction {
                 case value:java.sql.Array => statement.setArray(position, value)
                 case value:BigDecimal => statement.setBigDecimal(position, value)
                 case value:Boolean => statement.setBoolean(position, value)
-                case value:DateTime => statement.setTimestamp(position, new Timestamp(value.getMillis))
+                case value:DateTime => statement.setTimestamp(position, new Timestamp(value.getMillis), value.toGregorianCalendar)
                 case value:Double => statement.setDouble(position, value)
                 case value:Float => statement.setFloat(position, value)
                 case value:Int => statement.setInt(position, value)
