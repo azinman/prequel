@@ -50,6 +50,7 @@ object NullUUID
  *         string is invalid or if there is not enough parameters.
  */
 class Transaction( val connection: Connection ) {
+    var lastGeneratedKeys:List[Long] = Nil
 
     /**
      * Returns all records returned by the query after being converted by the
@@ -119,7 +120,27 @@ class Transaction( val connection: Connection ) {
     def executeUpdate( sql: String, params: Any* ): Int = {
         connection.usingPreparedStatement(sql) { statement =>
             Transaction.setParameters(statement, params)
-            statement.executeUpdate()
+            var num = statement.executeUpdate()
+            lastGeneratedKeys = Nil
+            if (num > 0) {
+                var rs:ResultSet = null
+                try {
+                    rs = statement.getGeneratedKeys
+                    if (rs != null) {
+                        while (rs.next) {
+                            lastGeneratedKeys = lastGeneratedKeys ::: rs.getLong(1) :: Nil
+                        }
+                    }
+                } catch {
+                    case e:Throwable =>
+                        println("Got sql exception in update for generated keys:" + e)
+                        e.printStackTrace
+                } finally {
+                    if (rs != null) try { rs.close } catch { case _ => }
+                    try { rollback } catch { case _ => }
+                }
+            }
+            num
         }
     }
 
