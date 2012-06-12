@@ -135,9 +135,9 @@ class Transaction( val connection: Connection ) {
                     case e:Throwable =>
                         println("Got sql exception in update for generated keys:" + e)
                         e.printStackTrace
+                        try { rollback } catch { case _ => }
                 } finally {
                     if (rs != null) try { rs.close } catch { case _ => }
-                    try { rollback } catch { case _ => }
                 }
             }
             num
