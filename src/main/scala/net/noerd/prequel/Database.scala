@@ -13,7 +13,7 @@ import org.apache.commons.pool.KeyedObjectPoolFactory
 import org.apache.commons.pool.impl.GenericObjectPool
 
 
-private [prequel] object ConnectionPools {
+object ConnectionPools {
 
     private val pools: MMap[ DatabaseConfig, PoolingDataSource ]= new HashMap
     private val UserProperty = "user"
